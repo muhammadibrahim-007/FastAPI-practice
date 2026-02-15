@@ -1,9 +1,12 @@
 from pydantic import BaseModel
 
 
-class Products(BaseModel):
-    id: int
+class ProductsCreate(BaseModel):
     name: str
     description: str
     price: float
     quantity: int
+
+
+class Products(ProductsCreate):
+    id: int

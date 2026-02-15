@@ -1,32 +1,97 @@
 from fastapi import FastAPI
-from models import Products
+from models import Products, ProductsCreate
+from database import get_db_connection
+
 app = FastAPI()
+
+# Database connection
+conn = get_db_connection()
+cursor = conn.cursor()
+
 
 @app.get("/")
 def greet():
-    return {"name":"Hassan Waheed Ali"}
+    return {"name": "Hassan Waheed Ali"}
 
-products = [
-    Products(id = 1, name = "Logitech Mouse",  description ="Gaming Mouse",  price =499.99, quantity= 50),
-    Products(id = 4, name = "Hitech Kyeboard", description = "Gaming Keyboard",  price =699.99, quantity= 10),
-    Products(id = 3, name = "View Sonic LCD", description = "Amuled display 120Hz",  price =800.00, quantity= 50)
-]
+
+products = []
+
+
 @app.get("/products")
 def fetch_products():
-    return products
+    try:
+        query = "SELECT * FROM products"
+        cursor.execute(query)
+        products = cursor.fetchall()
+        return products
+    except Exception as e:
+        conn.rollback()
+        return {"message": "Failed to fetch products from database,", "error": str(e)}
+
 
 @app.get("/products/{id}")
-def fetch_by_id(id:int):
-    for product in products:
-        if id == product.id:
+def fetch_by_id(id: int):
+    try:
+        query = "SELECT * FROM products WHERE id = %s"
+        cursor.execute(query, (id,))
+        product = cursor.fetchone()
+        if product:
             return product
-    return "Warning : Product not found please check data base"
+        return {"message": "Product not found", "id": id}
+    except Exception as e:
+        conn.rollback()
+        return {"error": str(e)}
+
 
 @app.post("/product")
-def add_product(product:Products):
-    products.append(product)
-    return {"product":product,"Message":"Product has been added" }
+def add_product(product: ProductsCreate):
+    try:
+        query = "INSERT INTO products (name, description,price,quantity) VALUES (%s,%s,%s,%s) RETURNING id"
+        cursor.execute(
+            query, (product.name, product.description, product.price, product.quantity)
+        )
+        product_id = cursor.fetchone()
+        conn.commit()
+        return {
+            "product": product,
+            "id": product_id,
+            "Message": "Product has been added",
+        }
+    except Exception as e:
+        conn.rollback()
+        return {"error": str(e)}
 
 
+@app.put("/product")
+def update_product_data(product: Products):
+    try:
+        query = "UPDATE products SET name=%s, description=%s, price=%s, quantity=%s WHERE id=%s"
+        cursor.execute(
+            query,
+            (
+                product.name,
+                product.description,
+                product.price,
+                product.quantity,
+                product.id,
+            ),
+        )
+        conn.commit()
+        return {"Message": "Product has been updated!!!"}
+    except Exception as e:
+        conn.rollback()
+        return {"error": str(e)}
 
 
+@app.delete("/product/")
+def delete_product(id: int):
+    try:
+        query = "DELETE FROM products WHERE id=%s"
+        cursor.execute(query, (id,))
+        if cursor.rowcount == 0:
+            return {"message": "Product Not Found"}
+        conn.commit()
+        return {"message": "Product has been deleted"}
+    except Exception as e:
+        conn.rollback()
+        return {"error": str(e)}
